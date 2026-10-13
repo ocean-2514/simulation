@@ -10,6 +10,7 @@ struct CircleCollider {
     float radius = 0.5f;
 };
 
+// currently convex polygon
 struct PolygonCollider {
     // vertices counterclockwise
     std::vector<glm::vec2> vertices;
@@ -28,9 +29,11 @@ using ColliderData = std::variant<
     CircleCollider, PolygonCollider>;
 
 struct Collider {
-    ColliderType type = ColliderType::Circle;
     ColliderData data = CircleCollider{};
-    // Transform2D localTransform{};
-    float restitution = 0.2f;
-    float friction = 0.5f;
+
+    ColliderType Type() const {
+        return std::holds_alternative<CircleCollider>(data)
+            ? ColliderType::Circle
+            : ColliderType::Polygon;
+    }
 };

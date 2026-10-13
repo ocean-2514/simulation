@@ -1,16 +1,25 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <cstdint>
+#include <limits>
+
+inline constexpr uint32_t InvalidIndex =
+    std::numeric_limits<uint32_t>::max();
+
+enum class MotionType {
+    Static, Kinematic, Dynamic
+};
 
 struct Transform2D {
     glm::vec2 position{0.0f};
-    // counterclockwise, expressed in degrees
+    // counterclockwise, expressed in radians
     float rotation = 0.0f;
 };
 
 inline glm::vec2 WorldPoint(const Transform2D& transform, 
     const glm::vec2& localPoint) {
-    float angle = glm::radians(transform.rotation);
+    const float angle = transform.rotation;
     float c = glm::cos(angle);
     float s = glm::sin(angle);
 

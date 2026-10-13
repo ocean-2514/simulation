@@ -1,7 +1,9 @@
 #include "Physics/Collision/CollisionDetector.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <limits>
-#include <glm/gtc/matrix_transform.hpp>
+#include <utility>
 
 namespace
 {
@@ -47,6 +49,22 @@ glm::vec2 ComputeContactPoint(
     return (contactA + contactB) * 0.5f;
 }
 
+// <point, dist>
+std::pair<glm::vec2, float> ClosestPointOnSegment(
+    const glm::vec2& center, const glm::vec2& vertexA,
+    const glm::vec2& vertexB) {
+    const glm::vec2 ab = vertexB - vertexA;
+    const float lengthSquared = glm::dot(ab, ab);
+    if (lengthSquared <= 1e-12f) {
+        return {vertexA, glm::length(center - vertexA)};
+    }
+
+    const float t = std::clamp(
+        glm::dot(center - vertexA, ab) / lengthSquared, 0.0f, 1.0f);
+    const glm::vec2 point = vertexA + t * ab;
+    return {point, glm::length(center - point)};
+}
+
 } // namespace
 
 
@@ -55,8 +73,8 @@ CollisionManifold CollisionDetector::Detect(
     const Transform2D& firstTransform,
     const Collider& second,
     const Transform2D& secondTransform) {
-    if (first.type == ColliderType::Circle && 
-        second.type == ColliderType::Circle) {
+    if (first.Type() == ColliderType::Circle &&
+        second.Type() == ColliderType::Circle) {
         return CircleVsCircle(
             std::get<CircleCollider>(first.data),
             firstTransform,
@@ -64,8 +82,8 @@ CollisionManifold CollisionDetector::Detect(
             secondTransform
         );
     }
-    if (first.type == ColliderType::Circle 
-        && second.type == ColliderType::Polygon) {
+    if (first.Type() == ColliderType::Circle
+        && second.Type() == ColliderType::Polygon) {
         return CircleVsPolygon(
             std::get<CircleCollider>(first.data),
             firstTransform,
@@ -73,17 +91,19 @@ CollisionManifold CollisionDetector::Detect(
             secondTransform
         );
     }
-    if (first.type == ColliderType::Polygon && 
-        second.type == ColliderType::Circle) {
-        return CircleVsPolygon(
+    if (first.Type() == ColliderType::Polygon &&
+        second.Type() == ColliderType::Circle) {
+        auto manifold = CircleVsPolygon(
             std::get<CircleCollider>(second.data),
             secondTransform,
             std::get<PolygonCollider>(first.data), 
             firstTransform
         );
+        manifold.normal = -manifold.normal;
+        return manifold;
     }
-    if (first.type == ColliderType::Polygon && 
-        second.type == ColliderType::Polygon) {
+    if (first.Type() == ColliderType::Polygon &&
+        second.Type() == ColliderType::Polygon) {
         return PolygonVsPolygon(
             std::get<PolygonCollider>(first.data),
             firstTransform,
@@ -128,9 +148,73 @@ CollisionManifold CollisionDetector::CircleVsPolygon(
     const Transform2D& circleTransform,
     const PolygonCollider& polygon,
     const Transform2D& polygonTransform) {
-    // TODO: implement circle-vs-convex-polygon detection with nearest-point projection.
-    // This stub keeps the API safe until the narrow-phase algorithm is added.
-    return CollisionManifold{};
+    const glm::vec2& center = circleTransform.position;
+    const float radius = circle.radius;
+    const std::size_t n = polygon.vertices.size();
+    if (n < 3 || radius <= 0.0f) return {};
+
+    std::vector<glm::vec2> vertices;
+    vertices.reserve(n);
+    for (const auto& vertex : polygon.vertices) {
+        vertices.push_back(WorldPoint(polygonTransform, vertex));
+    }
+
+    bool centerInsidePolygon = true;
+    glm::vec2 closestPoint{0.0f};
+    glm::vec2 closestOutwardNormal{0.0f};
+    float minDistance = std::numeric_limits<float>::max();
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto& vertexA = vertices[i];
+        const auto& vertexB = vertices[(i + 1) % n];
+        const glm::vec2 edge = vertexB - vertexA;
+        const float edgeLengthSquared = glm::dot(edge, edge);
+        if (edgeLengthSquared <= 1e-12f) continue;
+
+        // Polygon vertices are counterclockwise, so this is the outward normal.
+        const glm::vec2 outwardNormal = glm::normalize(
+            glm::vec2{edge.y, -edge.x});
+        const float signedDistance = glm::dot(center - vertexA, outwardNormal);
+        if (signedDistance > 0.0f) centerInsidePolygon = false;
+        if (signedDistance > radius) return {};
+
+        auto [point, dist] = ClosestPointOnSegment(center, vertexA, vertexB);
+        if (dist < minDistance) {
+            minDistance = dist;
+            closestPoint = point;
+            closestOutwardNormal = outwardNormal;
+        }
+    }
+    if (minDistance == std::numeric_limits<float>::max()) return {};
+
+    if (centerInsidePolygon) {
+        const glm::vec2 normal = minDistance > 1e-6f
+            ? glm::normalize(center - closestPoint)
+            : -closestOutwardNormal;
+        const glm::vec2 contactPoint = minDistance > 1e-6f
+            ? center - normal * radius
+            : closestPoint;
+        return {
+            true,
+            normal,
+            contactPoint,
+            minDistance + radius
+        };
+    }
+
+    if (minDistance >= radius) return {};
+
+    const glm::vec2 normal = minDistance > 1e-6f
+        ? glm::normalize(closestPoint - center)
+        : -closestOutwardNormal;
+    const glm::vec2 contactPoint = minDistance > 1e-6f
+        ? center + normal * radius
+        : closestPoint;
+    return {
+        true,
+        normal,
+        contactPoint,
+        radius - minDistance
+    };
 }
 
 CollisionManifold CollisionDetector::PolygonVsPolygon(

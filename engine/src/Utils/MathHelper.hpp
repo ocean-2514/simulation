@@ -72,9 +72,9 @@ public:
         return normals;
     }
 
-    // rotation expressed in degrees
+    // rotation expressed in radians
     static glm::vec2 Rotate(const glm::vec2& vec, float rotation) {
-        float angle = glm::radians(rotation);
+        const float angle = rotation;
         float c = std::cos(angle);
         float s = std::sin(angle);
         return {

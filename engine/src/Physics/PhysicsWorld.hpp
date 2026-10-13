@@ -3,7 +3,6 @@
 #include "Physics/RigidBody.hpp"
 #include "Physics/Collider.hpp"
 #include "BroadPhase/AABB.hpp"
-#include "Physics/Collision/CollisionDetector.hpp"
 #include <vector>
 
 struct PhysicsBody {
@@ -14,24 +13,24 @@ struct PhysicsBody {
 class PhysicsWorld
 {
 public:
-    int CreateBody(const RigidBody& body, const Collider& collider) {
+    uint32_t CreateBody(const RigidBody& body, const Collider& collider) {
         m_bodies.push_back({body, collider});
-        return static_cast<int>(m_bodies.size()) - 1;
+        return static_cast<uint32_t>(m_bodies.size()) - 1;
     }
 
-    PhysicsBody* GetBody(int id) {
-        if (id < 0 || id >= static_cast<int>(m_bodies.size())) return nullptr;
+    PhysicsBody* GetBody(uint32_t id) {
+        if (id == InvalidIndex || id >= static_cast<uint32_t>(m_bodies.size())) return nullptr;
         return &m_bodies[id];
     }
 
-    const PhysicsBody* GetBody(int id) const {
-        if (id < 0 || id >= static_cast<int>(m_bodies.size())) return nullptr;
+    const PhysicsBody* GetBody(uint32_t id) const {
+        if (id == InvalidIndex || id >= static_cast<uint32_t>(m_bodies.size())) return nullptr;
         return &m_bodies[id];
     }
 
-    void Step(float fixedDeltaTime);
+    void Step(float deltaTime);
 
-    glm::vec2 gravity{0.0f, -9.8f};
+    glm::vec2 gravity{0.0f, -1.0f};
 
 private:
     std::vector<PhysicsBody> m_bodies;

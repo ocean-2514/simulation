@@ -3,6 +3,8 @@
 #include "Geometry/2D/Shape.hpp"
 #include "Utils/MathHelper.hpp"
 
+
+// currently support only convex polygon
 class Polygon : public Shape
 {
 public:
