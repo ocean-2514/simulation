@@ -26,27 +26,63 @@ glm::vec2 ComputeContactPoint(
     const std::vector<glm::vec2>& verticesA, 
     const std::vector<glm::vec2>& verticesB, 
     const glm::vec2& axis) {
-    float minProj = std::numeric_limits<float>::max();
-    glm::vec2 contactA = verticesA[0];
-    for (const glm::vec2& v : verticesA) {
-        float proj = glm::dot(v, axis);
-        if (proj < minProj) {
-            minProj = proj;
-            contactA = v;
+    if (verticesA.empty() || verticesB.empty()) return glm::vec2{0.0f};
+
+    const glm::vec2 normal = glm::normalize(axis);
+    const glm::vec2 tangent{-normal.y, normal.x};
+
+    // The manifold normal points from A to B. The contacting support of A is
+    // therefore its maximum projection along the normal; B's is its minimum.
+    float supportA = -std::numeric_limits<float>::max();
+    for (const glm::vec2& vertex : verticesA) {
+        supportA = std::max(supportA, glm::dot(vertex, normal));
+    }
+
+    float supportB = std::numeric_limits<float>::max();
+    for (const glm::vec2& vertex : verticesB) {
+        supportB = std::min(supportB, glm::dot(vertex, normal));
+    }
+
+    // Keep the whole support edge when several vertices share the extreme
+    // projection. Picking an arbitrary endpoint creates an artificial torque
+    // for face-to-face contacts such as a polygon resting on the ground.
+    const float supportTolerance = 1e-5f
+        * std::max({1.0f, std::abs(supportA), std::abs(supportB)});
+    float tangentMinA = std::numeric_limits<float>::max();
+    float tangentMaxA = -std::numeric_limits<float>::max();
+    for (const glm::vec2& vertex : verticesA) {
+        if (supportA - glm::dot(vertex, normal) <= supportTolerance) {
+            const float projection = glm::dot(vertex, tangent);
+            tangentMinA = std::min(tangentMinA, projection);
+            tangentMaxA = std::max(tangentMaxA, projection);
         }
     }
-    
-    float maxProj = -std::numeric_limits<float>::max();
-    glm::vec2 contactB = verticesB[0];
-    for (const glm::vec2& v : verticesB) {
-        float proj = glm::dot(v, axis);
-        if (proj > maxProj) {
-            maxProj = proj;
-            contactB = v;
+
+    float tangentMinB = std::numeric_limits<float>::max();
+    float tangentMaxB = -std::numeric_limits<float>::max();
+    for (const glm::vec2& vertex : verticesB) {
+        if (glm::dot(vertex, normal) - supportB <= supportTolerance) {
+            const float projection = glm::dot(vertex, tangent);
+            tangentMinB = std::min(tangentMinB, projection);
+            tangentMaxB = std::max(tangentMaxB, projection);
         }
     }
-    
-    return (contactA + contactB) * 0.5f;
+
+    // Pick the middle of the overlapping support intervals. If the features
+    // only touch at a corner, use the midpoint of their nearest endpoints.
+    float tangentCoordinate;
+    if (tangentMaxA < tangentMinB) {
+        tangentCoordinate = 0.5f * (tangentMaxA + tangentMinB);
+    } else if (tangentMaxB < tangentMinA) {
+        tangentCoordinate = 0.5f * (tangentMaxB + tangentMinA);
+    } else {
+        const float overlapMin = std::max(tangentMinA, tangentMinB);
+        const float overlapMax = std::min(tangentMaxA, tangentMaxB);
+        tangentCoordinate = 0.5f * (overlapMin + overlapMax);
+    }
+
+    const float normalCoordinate = 0.5f * (supportA + supportB);
+    return normal * normalCoordinate + tangent * tangentCoordinate;
 }
 
 // <point, dist>

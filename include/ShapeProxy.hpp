@@ -16,10 +16,11 @@ public:
     }
 
     static ShapeProxy CreateProxy(std::shared_ptr<Shape> shape, 
-        const RigidBody& body, const Collider& collider) {
+        const RigidBody& body, const Collider& collider, 
+        const glm::vec2& pos = glm::vec2{0.f}) {
         ShapeProxy proxy;
         proxy.shape = std::move(shape);
-        proxy.physicsHandle = World().CreateBody(body, collider);
+        proxy.physicsHandle = World().CreateBody(body, collider, pos);
         return proxy;
     }
 
@@ -47,14 +48,14 @@ public:
         if (!body->rigidBody.IsKinematic()) {
             return false;
         }
-        body->rigidBody.transform.position = pos;
+        body->rigidBody.SetPosition(pos);
         return true;
     }
 
     bool SetLinearVelocity(const glm::vec2& velocity) {
         auto* body = World().GetBody(physicsHandle);
         if (!body || !body->rigidBody.IsKinematic()) return false;
-        body->rigidBody.linearVelocity = velocity;
+        body->rigidBody.SetLinearVelocity(velocity);
         return true;
     }
 

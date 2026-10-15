@@ -13,10 +13,52 @@ public:
     float inverseMass = 1.0f;
     float inverseInertia = 0.0f;
 
-    float restitution = 0.2f;
+    float restitution = 0.5f;
     float friction = 0.5f;
 
     MotionType motionType = MotionType::Dynamic;
+
+    void SetLinearVelocity(const glm::vec2& velocity) {
+        linearVelocity = velocity;
+    }
+
+    void SetAngularVelocity(float velocity) {
+        angularVelocity = velocity;
+    }
+
+    void SetMass(float mass) {
+        inverseMass = mass <= 1e-6f ? 0.f : 1.f / mass;
+    }
+
+    float GetMass() const {
+        return inverseMass < 0.f ? 0.f : 1.f / inverseMass;
+    }
+
+    void SetInertia(float inertia) {
+        inverseInertia = inertia <= 1e-6f ? 0.f : 1.f / inertia;
+    }
+
+    void SetPosition(const glm::vec2& pos) {
+        transform.position = pos;
+    }
+
+    void SetRotation(float rotation) {
+        transform.rotation = rotation;
+    }
+
+    void SetTransform(const Transform2D& trans) {
+        transform = trans;
+    }
+
+    void AddImpulse(const glm::vec2& impulse) {
+        if (motionType == MotionType::Static) return;
+        linearVelocity += impulse * inverseMass;
+    }
+
+    void AddAngularImpulse(float impulse) {
+        if (motionType == MotionType::Static) return;
+        angularVelocity += impulse * inverseInertia;
+    }
 
     void ApplyForce(const glm::vec2& value) {
         if (motionType == MotionType::Dynamic) {
@@ -27,7 +69,7 @@ public:
     void IntegrateForces(const glm::vec2& gravity, float deltaTime) {
         if (motionType != MotionType::Dynamic) return;
 
-        linearVelocity += (gravity + force * inverseMass) * deltaTime;
+        linearVelocity += (gravity + force) * inverseMass * deltaTime;
         force = glm::vec2{0.0f};
         angularVelocity += torque * inverseInertia * deltaTime;
         torque = 0.0f;
@@ -38,6 +80,11 @@ public:
 
         transform.position += linearVelocity * deltaTime;
         transform.rotation += angularVelocity * deltaTime;
+    }
+
+    void Update(const glm::vec2& gravity, float deltaTime) {
+        IntegrateForces(gravity, deltaTime);
+        IntegrateVelocity(deltaTime);
     }
 
     void Translate(const glm::vec2& pos) {

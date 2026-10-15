@@ -11,12 +11,8 @@ void PhysicsWorld::Step(float deltaTime) {
     */
 
     for (auto& physicsBody : m_bodies) {
-        physicsBody.rigidBody.IntegrateForces(gravity, deltaTime);
-    }
-
-    for (auto& physicsBody : m_bodies) {
-        physicsBody.rigidBody.IntegrateVelocity(deltaTime);
-    }
+        physicsBody.rigidBody.Update(gravity, deltaTime);
+    } 
 
     // m_aabbs.clear();
     // m_aabbs.reserve(m_bodies.size());
@@ -35,8 +31,8 @@ void PhysicsWorld::Step(float deltaTime) {
                 second.collider, second.rigidBody.transform
             );
             if (!manifold.colliding) continue;
-            ImpulseSolver::SolvePosition(
-                first.rigidBody, second.rigidBody, manifold);
+            ImpulseSolver::SolveVelocity(first, second, manifold);
+            ImpulseSolver::SolvePosition(first, second, manifold);
         }
     }
 }

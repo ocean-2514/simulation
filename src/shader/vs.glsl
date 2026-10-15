@@ -9,9 +9,11 @@ uniform mat4 uProjection;
 
 out vec3 vNormal;
 out vec2 vTexCoord;
+flat out int left;
 
 void main()
 {
+    left = int(aPos.x < 0);
     vec4 worldPos = uModel * vec4(aPos, 1.0);
     gl_Position = uProjection * uView * worldPos;
     vNormal = mat3(transpose(inverse(uModel))) * aNormal;

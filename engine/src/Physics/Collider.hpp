@@ -30,6 +30,23 @@ using ColliderData = std::variant<
 
 struct Collider {
     ColliderData data = CircleCollider{};
+    glm::vec2 centroid{0.0f};
+
+    Collider(ColliderData data)
+    : data(std::move(data)) {
+        switch (Type())
+        {
+        case ColliderType::Circle:
+            centroid = glm::vec2{0.0f};
+            break;
+        case ColliderType::Polygon:
+            centroid = MathHelper::CalculatePolygonCentroid(
+                std::get<PolygonCollider>(this->data).vertices
+            );
+        default:
+            break;
+        }
+    }
 
     ColliderType Type() const {
         return std::holds_alternative<CircleCollider>(data)

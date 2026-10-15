@@ -11,48 +11,85 @@ public:
     bool Init() override {
         m_shader = std::make_unique<Shader>(SHADER_DIR "/vs.glsl", SHADER_DIR "/fs.glsl");
 
-        RigidBody groundBody{};
-        groundBody.motionType = MotionType::Static;
+        RigidBody boundsBody{};
+        boundsBody.motionType = MotionType::Static;
+        boundsBody.inverseMass = 0.f;
         RigidBody triangleBody{};
         triangleBody.motionType = MotionType::Kinematic;
+        triangleBody.inverseMass = 0.f;
 
         std::vector<glm::vec2> polygonPoints = {
-            {-0.5f, -0.5f}, {0.8f, -0.4f}, {0.4f, 0.5f}, {-0.4f, 0.4f}
+            {-0.5f, -0.5f}, {0.8f, -0.5f}, {0.4f, 0.5f}, {-0.4f, 0.4f}
         };
         std::vector<glm::vec2> trianglePoints = {
             {-0.3f, -0.3f}, {0.3f, -0.3f}, {0.f, 0.3f}
         };
-        std::vector<glm::vec2> groundPoints = {
-            {-2.0f, -0.9f}, {-2.0f, -1.1f}, {2.0f, -1.1f}, {2.0f, -0.9f}
-        };
-
         PolygonCollider polygonCollider{polygonPoints};
         polygonCollider.PopulateNormals();
         PolygonCollider triangleCollider{trianglePoints};
         triangleCollider.PopulateNormals();
-        PolygonCollider groundCollider{groundPoints};
-        groundCollider.PopulateNormals();
 
-        m_ground = ShapeProxy::CreateProxy(
-            std::make_shared<Polygon>(groundPoints),
-            groundBody,
-            Collider{ColliderData{groundCollider}}
-        );
+        constexpr float boundsHalfWidth = 3.1f;
+        constexpr float boundsBottom = -1.6f;
+        constexpr float boundsTop = 1.6f;
+        constexpr float wallThickness = 0.2f;
+        auto createWall = [&boundsBody](float width, float height,
+            const glm::vec2& position) {
+            std::vector<glm::vec2> wallPoints = {
+                {-width * 0.5f, -height * 0.5f},
+                { width * 0.5f, -height * 0.5f},
+                { width * 0.5f,  height * 0.5f},
+                {-width * 0.5f,  height * 0.5f}
+            };
+            PolygonCollider wallCollider{wallPoints};
+            wallCollider.PopulateNormals();
+            return ShapeProxy::CreateProxy(
+                std::make_shared<Polygon>(wallPoints),
+                boundsBody,
+                Collider{ColliderData{wallCollider}},
+                position
+            );
+        };
+        const float boundsHeight = boundsTop - boundsBottom;
+        const float boundsCenterY = (boundsTop + boundsBottom) * 0.5f;
+        m_bounds.reserve(4);
+        m_bounds.push_back(createWall(
+            boundsHalfWidth * 2.0f + wallThickness * 2.0f,
+            wallThickness,
+            {0.0f, boundsBottom - wallThickness * 0.5f}
+        ));
+        m_bounds.push_back(createWall(
+            boundsHalfWidth * 2.0f + wallThickness * 2.0f,
+            wallThickness,
+            {0.0f, boundsTop + wallThickness * 0.5f}
+        ));
+        m_bounds.push_back(createWall(
+            wallThickness,
+            boundsHeight + wallThickness * 2.0f,
+            {-boundsHalfWidth - wallThickness * 0.5f, boundsCenterY}
+        ));
+        m_bounds.push_back(createWall(
+            wallThickness,
+            boundsHeight + wallThickness * 2.0f,
+            {boundsHalfWidth + wallThickness * 0.5f, boundsCenterY}
+        ));
         m_triangle = ShapeProxy::CreateProxy(
             std::make_shared<Polygon>(trianglePoints),
             triangleBody,
-            Collider{ColliderData{triangleCollider}}
+            Collider{ColliderData{triangleCollider}},
+            {0.f, 1.f}
         );
-        m_triangle.PushModelTransform({0.0f, 1.0f});
         m_polygon = ShapeProxy::CreateProxy(
             std::make_shared<Polygon>(polygonPoints),
             RigidBody{},
-            Collider{ColliderData{polygonCollider}}
+            Collider{ColliderData{polygonCollider}},
+            {-1.f, 0.f}
         );
         m_circle = ShapeProxy::CreateProxy(
             std::make_shared<Circle>(0.5f),
             RigidBody{},
-            Collider{CircleCollider{0.5f}}
+            Collider{CircleCollider{0.5f}},
+            {-1.f, 1.f}
         );
 
         return true;
@@ -68,7 +105,7 @@ public:
 
         float aspect = static_cast<float>(Engine::GetInstance().GetWidth()) 
             / static_cast<float>(Engine::GetInstance().GetHeight());
-        float halfHeight = 1.0f;
+        float halfHeight = 1.0f * 2;
         float halfWidth = halfHeight * aspect;
 
         glm::mat4 projection = glm::ortho(-halfWidth, halfWidth, -halfHeight, halfHeight, -1.0f, 10.0f);
@@ -94,7 +131,11 @@ public:
             m_circle.Draw();
         }
         m_shader->setMatrix4f("uModel", glm::mat4{1.0f});
-        m_ground.Draw();
+        for (const auto& bound : m_bounds) {
+            glm::mat4 model = bound.PullModelTransform();
+            m_shader->setMatrix4f("uModel", model);
+            bound.Draw();
+        }
     }
 
     void ProcessInput() {
@@ -119,7 +160,7 @@ public:
 private:
     static constexpr float m_triangleMoveSpeed = 1.5f;
     std::unique_ptr<Shader> m_shader;
-    ShapeProxy m_ground;
+    std::vector<ShapeProxy> m_bounds;
     ShapeProxy m_polygon;
     ShapeProxy m_triangle;
     ShapeProxy m_circle;
