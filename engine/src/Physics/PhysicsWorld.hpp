@@ -44,13 +44,13 @@ public:
         }
     }
 
-    void Step(float deltaTime, int iteration = 10);
+    void Step(float deltaTime, int subStepCount = 5);
 
     glm::vec2 gravity{0.0f, -1.0f};
 
 private:
     static AABB2 ComputeBounds(const PhysicsBody& body);
-    void StepOneIteration(float deltaTime);
+    void SubStep(float deltaTime);
 
     std::vector<PhysicsBody> m_bodies;
     std::vector<BVHTree2D::ProxyId> m_proxyIds;

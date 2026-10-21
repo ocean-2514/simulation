@@ -62,15 +62,15 @@ uint32_t PhysicsWorld::CreateBody(
     return bodyId;
 }
 
-void PhysicsWorld::Step(float deltaTime, int iteration) {
+void PhysicsWorld::Step(float deltaTime, int subStepCount) {
     if (!(deltaTime > 0.0f) || !std::isfinite(deltaTime)) return;
-    float delta = deltaTime / iteration;
-    for (int i = 0; i < iteration; ++i) {
-        StepOneIteration(delta);
+    float delta = deltaTime / subStepCount;
+    for (int i = 0; i < subStepCount; ++i) {
+        SubStep(delta);
     }   
 }
 
-void PhysicsWorld::StepOneIteration(float deltaTime) {
+void PhysicsWorld::SubStep(float deltaTime) {
     for (auto& physicsBody : m_bodies) {
         physicsBody.rigidBody.Update(gravity, deltaTime);
     }

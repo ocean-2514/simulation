@@ -69,7 +69,7 @@ public:
     void IntegrateForces(const glm::vec2& gravity, float deltaTime) {
         if (motionType != MotionType::Dynamic) return;
 
-        linearVelocity += (gravity + force) * inverseMass * deltaTime;
+        linearVelocity += (gravity + force * inverseMass) * deltaTime;
         force = glm::vec2{0.0f};
         angularVelocity += torque * inverseInertia * deltaTime;
         torque = 0.0f;
