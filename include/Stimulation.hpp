@@ -83,7 +83,7 @@ public:
             std::make_shared<Polygon>(polygonPoints),
             RigidBody{},
             Collider{ColliderData{polygonCollider}},
-            {-1.f, 0.f}
+            {2.f, 1.05f}
         );
         m_circle = ShapeProxy::CreateProxy(
             std::make_shared<Circle>(0.5f),
@@ -91,6 +91,27 @@ public:
             Collider{CircleCollider{0.5f}},
             {-1.f, 1.f}
         );
+
+        constexpr float ballSpacing = 0.19f;
+        auto ballGeometry = std::make_shared<Circle>(m_ballRadius, 32);
+        RigidBody ballBody{};
+        ballBody.restitution = 0.15f;
+        ballBody.friction = 0.6f;
+        m_balls.reserve(m_ballColumns * m_ballRows);
+        for (int row = 0; row < m_ballRows; ++row) {
+            const float rowOffset = row % 2 == 0 ? 0.0f : ballSpacing * 0.5f;
+            for (int column = 0; column < m_ballColumns; ++column) {
+                const float x = -0.5f * (m_ballColumns - 1) * ballSpacing
+                    + column * ballSpacing + rowOffset;
+                const float y = m_ballStartY + row * ballSpacing;
+                m_balls.push_back(ShapeProxy::CreateProxy(
+                    ballGeometry,
+                    ballBody,
+                    Collider{CircleCollider{m_ballRadius}},
+                    {x, y}
+                ));
+            }
+        }
 
         return true;
     }
@@ -130,6 +151,11 @@ public:
             m_shader->setMatrix4f("uModel", model);
             m_circle.Draw();
         }
+        for (const auto& ball : m_balls) {
+            glm::mat4 model = ball.PullModelTransform();
+            m_shader->setMatrix4f("uModel", model);
+            ball.Draw();
+        }
         m_shader->setMatrix4f("uModel", glm::mat4{1.0f});
         for (const auto& bound : m_bounds) {
             glm::mat4 model = bound.PullModelTransform();
@@ -158,9 +184,14 @@ public:
     }
 
 private:
+    static constexpr int m_ballColumns = 25;
+    static constexpr int m_ballRows = 8;
+    static constexpr float m_ballRadius = 0.075f;
+    static constexpr float m_ballStartY = -1.0f;
     static constexpr float m_triangleMoveSpeed = 1.5f;
     std::unique_ptr<Shader> m_shader;
     std::vector<ShapeProxy> m_bounds;
+    std::vector<ShapeProxy> m_balls;
     ShapeProxy m_polygon;
     ShapeProxy m_triangle;
     ShapeProxy m_circle;
