@@ -82,7 +82,7 @@ public:
         m_polygon = ShapeProxy::CreateProxy(
             std::make_shared<Polygon>(polygonPoints),
             RigidBody{},
-            Collider{ColliderData{polygonCollider}},
+            Collider{polygonCollider},
             {2.f, 1.05f}
         );
         m_circle = ShapeProxy::CreateProxy(
@@ -112,6 +112,16 @@ public:
                 ));
             }
         }
+
+        auto& world = Engine::GetInstance().GetPhysicsWorld();
+        auto springForce = std::make_shared<SpringForceGenerator>(
+            SpringForceDesc{m_triangle.physicsHandle, m_circle.physicsHandle}
+        );
+        auto distanceConstraint = std::make_shared<DistanceConstraint>(
+            DistanceConstraintDesc{m_triangle.physicsHandle, m_polygon.physicsHandle}
+        );
+        world.RegisterForceGenerator(springForce);
+        world.RegisterConstraint(distanceConstraint);
 
         return true;
     }

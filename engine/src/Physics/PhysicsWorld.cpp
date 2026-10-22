@@ -1,6 +1,6 @@
 #include "Physics/PhysicsWorld.hpp"
 #include "Physics/Collision/CollisionDetector.hpp"
-#include "Physics/Solver/ImpulseSolver.hpp"
+#include "Physics/Collision/ContactConstraint.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -42,7 +42,7 @@ AABB2 PhysicsWorld::ComputeBounds(const PhysicsBody& body) {
     return bounds;
 }
 
-uint32_t PhysicsWorld::CreateBody(
+BodyId PhysicsWorld::CreateBody(
     const RigidBody& body,
     const Collider& collider,
     const glm::vec2& pos) {
@@ -56,14 +56,15 @@ uint32_t PhysicsWorld::CreateBody(
         physicsBody.collider, physicsBody.rigidBody.GetMass()));
     physicsBody.bounds = ComputeBounds(physicsBody);
 
-    const uint32_t bodyId = static_cast<uint32_t>(m_bodies.size());
+    const BodyId bodyId = static_cast<BodyId>(m_bodies.size());
     m_bodies.push_back(std::move(physicsBody));
     m_proxyIds.push_back(m_broadPhase.CreateProxy(bodyId, m_bodies.back().bounds));
     return bodyId;
 }
 
 void PhysicsWorld::Step(float deltaTime, int subStepCount) {
-    if (!(deltaTime > 0.0f) || !std::isfinite(deltaTime)) return;
+    if (!(deltaTime > 0.0f) || !std::isfinite(deltaTime)
+        || subStepCount <= 0) return;
     float delta = deltaTime / subStepCount;
     for (int i = 0; i < subStepCount; ++i) {
         SubStep(delta);
@@ -71,6 +72,11 @@ void PhysicsWorld::Step(float deltaTime, int subStepCount) {
 }
 
 void PhysicsWorld::SubStep(float deltaTime) {
+    m_currentTime += deltaTime;
+    ForceContext forceContext{*this, m_currentTime};
+    for (auto& gen : m_forceGenerators) {
+        if (gen) gen->Apply(forceContext, deltaTime);
+    }
     for (auto& physicsBody : m_bodies) {
         physicsBody.rigidBody.Update(gravity, deltaTime);
     }
@@ -95,6 +101,7 @@ void PhysicsWorld::SubStep(float deltaTime) {
         }
     }
 
+    std::vector<ContactConstraint> contacts;
     std::vector<BVHTree2D::ObjectHandle> candidates;
     for (std::size_t i = 0; i < m_bodies.size(); ++i) {
         candidates.clear();
@@ -111,13 +118,50 @@ void PhysicsWorld::SubStep(float deltaTime) {
                 continue;
             }
 
-            const auto& manifold = CollisionDetector::Detect(
+            const auto manifold = CollisionDetector::Detect(
                 first.collider, first.rigidBody.transform,
                 second.collider, second.rigidBody.transform
             );
             if (!manifold.colliding) continue;
-            ImpulseSolver::SolveVelocity(first, second, manifold);
-            ImpulseSolver::SolvePosition(first, second, manifold);
+            contacts.emplace_back(
+                static_cast<BodyId>(i), static_cast<BodyId>(j), manifold);
+        }
+    }
+
+    // prepare
+    SolverContext solverContext{
+        deltaTime, 1.0f / deltaTime, gravity, {}, *this
+    };
+    for (auto& contact : contacts) {
+        contact.Prepare(solverContext);
+    }
+    for (auto& constraint : m_constraints) {
+        constraint->Prepare(solverContext);
+    }
+    for (auto& contact : contacts) {
+        contact.WarmStart(solverContext);
+    }
+    for (auto& constraint : m_constraints) {
+        constraint->WarmStart(solverContext);
+    }
+
+
+    int velocityIterations = 5;
+    for (int i = 0; i < velocityIterations; ++i) {
+        for (auto& contact : contacts) {
+            contact.SolveVelocity(solverContext);
+        }
+        for (auto& constraint : m_constraints) {
+            constraint->SolveVelocity(solverContext);
+        }
+    }
+    int positionIterations = 5;
+    for (int i = 0; i < positionIterations; ++i) {
+        for (auto& contact : contacts) {
+            contact.SolvePosition(solverContext);
+        }
+        for (auto& constraint : m_constraints) {
+            constraint->SolvePosition(solverContext);
         }
     }
 }

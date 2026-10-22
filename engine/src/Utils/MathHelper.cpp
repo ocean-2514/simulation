@@ -80,6 +80,10 @@ glm::vec2 MathHelper::Rotate(const glm::vec2& vec, float rotation) {
     };
 }
 
+float MathHelper::Cross(const glm::vec2& a, const glm::vec2& b) {
+    return a.x * b.y - a.y * b.x;
+}
+
 float MathHelper::InertiaCalculator::operator()(
     const CircleCollider& circle) {
     if (circle.radius <= 0.0f || !std::isfinite(circle.radius)) return 0.0f;

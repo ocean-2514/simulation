@@ -50,6 +50,15 @@ public:
         transform = trans;
     }
 
+    // dont secure that offset is inside the body
+    glm::vec2 VelocityAtPoint(const glm::vec2& worldOffset) {
+        if (IsStatic()) return glm::vec2{0.0f};
+        return linearVelocity + glm::vec2{
+            -angularVelocity * worldOffset.y,
+            angularVelocity * worldOffset.x
+        };
+    }
+
     void AddImpulse(const glm::vec2& impulse) {
         if (motionType == MotionType::Static) return;
         linearVelocity += impulse * inverseMass;
@@ -63,6 +72,12 @@ public:
     void ApplyForce(const glm::vec2& value) {
         if (motionType == MotionType::Dynamic) {
             force += value;
+        }
+    }
+
+    void ApplyTorque(float value) {
+        if (motionType == MotionType::Dynamic) {
+            torque += value;
         }
     }
 

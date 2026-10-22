@@ -7,6 +7,8 @@
 inline constexpr uint32_t InvalidIndex =
     std::numeric_limits<uint32_t>::max();
 
+using BodyId = uint32_t;
+
 enum class MotionType {
     Static, Kinematic, Dynamic
 };

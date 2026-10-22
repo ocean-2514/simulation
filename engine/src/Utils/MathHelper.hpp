@@ -22,6 +22,7 @@ public:
 
     // rotation expressed in radians
     static glm::vec2 Rotate(const glm::vec2& vec, float rotation);
+    static float Cross(const glm::vec2& a, const glm::vec2& b);
 
     struct InertiaCalculator {
         float operator()(const CircleCollider& circle);

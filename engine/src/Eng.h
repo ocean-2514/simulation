@@ -6,4 +6,7 @@
 #include "Geometry/2D/Circle.hpp"
 #include "Geometry/2D/Rectangle.hpp"
 #include "Geometry/2D/Polygon.hpp"
+#include "Physics/Forces/SpringForce.hpp"
+#include "Physics/Constraints/DistanceConstraint.hpp"
+#include "Physics/Constraints/FixedConstraint.hpp"
 #include "Input/Key.h"
