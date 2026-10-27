@@ -7,6 +7,16 @@
 #include <limits>
 #include <utility>
 
+namespace
+{
+
+bool CanCollide(const RigidBody& bodyA, const RigidBody& bodyB) {
+    return (bodyA.categoryBits & bodyB.maskBits) != 0
+        && (bodyA.maskBits & bodyB.categoryBits) != 0;
+}
+
+} // namespace
+
 AABB2 PhysicsWorld::ComputeBounds(const PhysicsBody& body) {
     const AABB2 invalidBounds{{1.0f, 1.0f}, {-1.0f, -1.0f}};
     const Transform2D& transform = body.rigidBody.transform;
@@ -113,6 +123,7 @@ void PhysicsWorld::SubStep(float deltaTime) {
 
             auto& first = m_bodies[i];
             auto& second = m_bodies[j];
+            if (!CanCollide(first.rigidBody, second.rigidBody)) continue;
             if (!first.rigidBody.IsDynamic()
                 && !second.rigidBody.IsDynamic()) {
                 continue;

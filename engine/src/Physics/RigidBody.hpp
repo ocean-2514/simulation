@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Physics/PhysicsTypes.hpp"
+#include "Physics/Collision/CollisionGroup.hpp"
 
 class RigidBody {
 public:
@@ -18,37 +19,8 @@ public:
 
     MotionType motionType = MotionType::Dynamic;
 
-    void SetLinearVelocity(const glm::vec2& velocity) {
-        linearVelocity = velocity;
-    }
-
-    void SetAngularVelocity(float velocity) {
-        angularVelocity = velocity;
-    }
-
-    void SetMass(float mass) {
-        inverseMass = mass <= 1e-6f ? 0.f : 1.f / mass;
-    }
-
-    float GetMass() const {
-        return inverseMass < 0.f ? 0.f : 1.f / inverseMass;
-    }
-
-    void SetInertia(float inertia) {
-        inverseInertia = inertia <= 1e-6f ? 0.f : 1.f / inertia;
-    }
-
-    void SetPosition(const glm::vec2& pos) {
-        transform.position = pos;
-    }
-
-    void SetRotation(float rotation) {
-        transform.rotation = rotation;
-    }
-
-    void SetTransform(const Transform2D& trans) {
-        transform = trans;
-    }
+    uint16_t categoryBits = static_cast<uint16_t>(CollisionGroup::GROUP0);
+    uint16_t maskBits = DefaultCollisionMask;
 
     // dont secure that offset is inside the body
     glm::vec2 VelocityAtPoint(const glm::vec2& worldOffset) {
@@ -108,6 +80,62 @@ public:
 
     void Rotate(float angle) {
         transform.rotation += angle;
+    }
+
+    void SetLinearVelocity(const glm::vec2& velocity) {
+        linearVelocity = velocity;
+    }
+
+    void SetAngularVelocity(float velocity) {
+        angularVelocity = velocity;
+    }
+
+    void SetMass(float mass) {
+        inverseMass = mass <= 1e-6f ? 0.f : 1.f / mass;
+    }
+
+    float GetMass() const {
+        return inverseMass < 0.f ? 0.f : 1.f / inverseMass;
+    }
+
+    void SetInertia(float inertia) {
+        inverseInertia = inertia <= 1e-6f ? 0.f : 1.f / inertia;
+    }
+
+    void SetPosition(const glm::vec2& pos) {
+        transform.position = pos;
+    }
+
+    void SetRotation(float rotation) {
+        transform.rotation = rotation;
+    }
+
+    void SetTransform(const Transform2D& trans) {
+        transform = trans;
+    }
+
+    void SetCollisionGroup(CollisionGroup group) {
+        categoryBits = static_cast<uint16_t>(group);
+    }
+
+    void AddCollisionGroup(CollisionGroup group) {
+        categoryBits |= static_cast<uint16_t>(group);
+    }
+
+    void SetCategoryBits(uint16_t bits) {
+        categoryBits = bits;
+    }
+
+    void SetCollisionMask(CollisionGroup group) {
+        maskBits = static_cast<uint16_t>(group);
+    }
+
+    void AddCollisionMask(CollisionGroup group) {
+        maskBits |= static_cast<uint16_t>(group);
+    }
+
+    void SetMaskBits(uint16_t bits) {
+        maskBits = bits;
     }
 
     bool IsDynamic() const {

@@ -14,6 +14,7 @@ public:
         RigidBody boundsBody{};
         boundsBody.motionType = MotionType::Static;
         boundsBody.inverseMass = 0.f;
+        boundsBody.SetCollisionGroup(CollisionGroup::GROUP1);
         RigidBody triangleBody{};
         triangleBody.motionType = MotionType::Kinematic;
         triangleBody.inverseMass = 0.f;
@@ -103,9 +104,11 @@ public:
         };
         PolygonCollider fixedObjectCollider{fixedObjectPoints};
         fixedObjectCollider.PopulateNormals();
+        RigidBody fixedObjectRigid;
+        fixedObjectRigid.SetCollisionMask(CollisionGroup::GROUP0);
         m_fixedObject = ShapeProxy::CreateProxy(
             std::make_shared<Polygon>(fixedObjectPoints),
-            RigidBody{},
+            fixedObjectRigid,
             Collider{ColliderData{fixedObjectCollider}},
             {boundsHalfWidth - fixedObjectHalfWidth, fixedObjectAnchorY}
         );
@@ -121,9 +124,11 @@ public:
         };
         PolygonCollider hingedObjectCollider{hingedObjectPoints};
         hingedObjectCollider.PopulateNormals();
+        RigidBody hingedObjectRigid;
+        hingedObjectRigid.SetCollisionMask(CollisionGroup::GROUP0);
         m_hingedObject = ShapeProxy::CreateProxy(
             std::make_shared<Polygon>(hingedObjectPoints),
-            RigidBody{},
+            hingedObjectRigid,
             Collider{ColliderData{hingedObjectCollider}},
             {-boundsHalfWidth + hingedObjectHalfWidth, hingedObjectAnchorY}
         );
