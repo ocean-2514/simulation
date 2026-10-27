@@ -141,9 +141,11 @@ void DistanceConstraint::SolvePosition(SolverContext& context) {
         rigidB.transform, m_localAnchorB);
     const glm::vec2 separation = worldAnchorB - worldAnchorA;
     const float length = glm::length(separation);
-    if (length <= 1e-6f) return;
 
-    const glm::vec2 normal = separation / length;
+    glm::vec2 normal;
+    if (length <= 1e-6f) normal = glm::vec2{1.0f, 0.0f};
+    else normal = separation / length;
+
     const float error = length - m_targetLength;
     const float slop = std::max(context.settings.slop, 0.0f);
     float correctedError = 0.0f;

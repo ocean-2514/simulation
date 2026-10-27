@@ -9,4 +9,5 @@
 #include "Physics/Forces/SpringForce.hpp"
 #include "Physics/Constraints/DistanceConstraint.hpp"
 #include "Physics/Constraints/FixedConstraint.hpp"
+#include "Physics/Constraints/HingeConstraint.hpp"
 #include "Input/Key.h"

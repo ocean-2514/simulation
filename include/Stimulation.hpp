@@ -92,6 +92,42 @@ public:
             {-1.f, 1.f}
         );
 
+        constexpr float fixedObjectHalfWidth = 0.25f;
+        constexpr float fixedObjectHalfHeight = 0.16f;
+        constexpr float fixedObjectAnchorY = 0.0f;
+        std::vector<glm::vec2> fixedObjectPoints = {
+            {-fixedObjectHalfWidth, -fixedObjectHalfHeight},
+            { fixedObjectHalfWidth, -fixedObjectHalfHeight},
+            { fixedObjectHalfWidth,  fixedObjectHalfHeight},
+            {-fixedObjectHalfWidth,  fixedObjectHalfHeight}
+        };
+        PolygonCollider fixedObjectCollider{fixedObjectPoints};
+        fixedObjectCollider.PopulateNormals();
+        m_fixedObject = ShapeProxy::CreateProxy(
+            std::make_shared<Polygon>(fixedObjectPoints),
+            RigidBody{},
+            Collider{ColliderData{fixedObjectCollider}},
+            {boundsHalfWidth - fixedObjectHalfWidth, fixedObjectAnchorY}
+        );
+
+        constexpr float hingedObjectHalfWidth = 0.325f;
+        constexpr float hingedObjectHalfHeight = 0.08f;
+        constexpr float hingedObjectAnchorY = 0.75f;
+        std::vector<glm::vec2> hingedObjectPoints = {
+            {-hingedObjectHalfWidth, -hingedObjectHalfHeight},
+            { hingedObjectHalfWidth, -hingedObjectHalfHeight},
+            { hingedObjectHalfWidth,  hingedObjectHalfHeight},
+            {-hingedObjectHalfWidth,  hingedObjectHalfHeight}
+        };
+        PolygonCollider hingedObjectCollider{hingedObjectPoints};
+        hingedObjectCollider.PopulateNormals();
+        m_hingedObject = ShapeProxy::CreateProxy(
+            std::make_shared<Polygon>(hingedObjectPoints),
+            RigidBody{},
+            Collider{ColliderData{hingedObjectCollider}},
+            {-boundsHalfWidth + hingedObjectHalfWidth, hingedObjectAnchorY}
+        );
+
         constexpr float ballSpacing = 0.19f;
         auto ballGeometry = std::make_shared<Circle>(m_ballRadius, 32);
         RigidBody ballBody{};
@@ -117,11 +153,30 @@ public:
         auto springForce = std::make_shared<SpringForceGenerator>(
             SpringForceDesc{m_triangle.physicsHandle, m_circle.physicsHandle}
         );
-        auto distanceConstraint = std::make_shared<DistanceConstraint>(
-            DistanceConstraintDesc{m_triangle.physicsHandle, m_polygon.physicsHandle}
-        );
+        FixedConstraintDesc fixedConstraintDesc{};
+        fixedConstraintDesc.bodyA = m_bounds[3].physicsHandle;
+        fixedConstraintDesc.bodyB = m_fixedObject.physicsHandle;
+        fixedConstraintDesc.localAnchorA = {
+            -wallThickness * 0.5f,
+            fixedObjectAnchorY - boundsCenterY
+        };
+        fixedConstraintDesc.localAnchorB = {fixedObjectHalfWidth, 0.0f};
+        fixedConstraintDesc.referenceAngle = 0.0f;
+        auto fixedConstraint = std::make_shared<FixedConstraint>(
+            fixedConstraintDesc);
+        HingeConstraintDesc hingeConstraintDesc{};
+        hingeConstraintDesc.bodyA = m_bounds[2].physicsHandle;
+        hingeConstraintDesc.bodyB = m_hingedObject.physicsHandle;
+        hingeConstraintDesc.localAnchorA = {
+            wallThickness * 0.5f,
+            hingedObjectAnchorY - boundsCenterY
+        };
+        hingeConstraintDesc.localAnchorB = {-hingedObjectHalfWidth, 0.0f};
+        auto hingeConstraint = std::make_shared<HingeConstraint>(
+            hingeConstraintDesc);
         world.RegisterForceGenerator(springForce);
-        world.RegisterConstraint(distanceConstraint);
+        world.RegisterConstraint(fixedConstraint);
+        world.RegisterConstraint(hingeConstraint);
 
         return true;
     }
@@ -161,6 +216,19 @@ public:
             m_shader->setMatrix4f("uModel", model);
             m_circle.Draw();
         }
+        m_shader->setVec3("uColor", 0.24f, 0.72f, 0.56f);
+        {
+            glm::mat4 model = m_fixedObject.PullModelTransform();
+            m_shader->setMatrix4f("uModel", model);
+            m_fixedObject.Draw();
+        }
+        m_shader->setVec3("uColor", 0.24f, 0.48f, 0.86f);
+        {
+            glm::mat4 model = m_hingedObject.PullModelTransform();
+            m_shader->setMatrix4f("uModel", model);
+            m_hingedObject.Draw();
+        }
+        m_shader->setVec3("uColor", 0.76f, 0.24f, 0.34f);
         for (const auto& ball : m_balls) {
             glm::mat4 model = ball.PullModelTransform();
             m_shader->setMatrix4f("uModel", model);
@@ -205,4 +273,6 @@ private:
     ShapeProxy m_polygon;
     ShapeProxy m_triangle;
     ShapeProxy m_circle;
+    ShapeProxy m_fixedObject;
+    ShapeProxy m_hingedObject;
 };
