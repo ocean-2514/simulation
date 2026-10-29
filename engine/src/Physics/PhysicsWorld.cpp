@@ -82,6 +82,9 @@ void PhysicsWorld::Step(float deltaTime, int subStepCount) {
 }
 
 void PhysicsWorld::SubStep(float deltaTime) {
+    ++m_stepIndex;
+    m_contactCache.BeginStep(m_stepIndex);
+
     m_currentTime += deltaTime;
     ForceContext forceContext{*this, m_currentTime};
     for (auto& gen : m_forceGenerators) {
@@ -143,6 +146,9 @@ void PhysicsWorld::SubStep(float deltaTime) {
     SolverContext solverContext{
         deltaTime, 1.0f / deltaTime, gravity, {}, *this
     };
+    solverContext.contactCache = &m_contactCache;
+    solverContext.stepIndex = m_stepIndex;
+
     for (auto& contact : contacts) {
         contact.Prepare(solverContext);
     }
@@ -175,4 +181,6 @@ void PhysicsWorld::SubStep(float deltaTime) {
             constraint->SolvePosition(solverContext);
         }
     }
+
+    m_contactCache.EndStep(3);
 }

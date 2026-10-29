@@ -4,20 +4,11 @@
 #include "Physics/Constraints/Constraint.hpp"
 #include "Physics/PhysicsTypes.hpp"
 
-struct ContactImpulseState {
-    glm::vec2 normal{0.0f};
-    glm::vec2 tangent{0.0f};
+struct ContactPointState {
     glm::vec2 rA{0.0f};
     glm::vec2 rB{0.0f};
-
-    float inverseMassA = 0.0f;
-    float inverseMassB = 0.0f;
-    float inverseInertiaA = 0.0f;
-    float inverseInertiaB = 0.0f;
-    float inverseMassSum = 0.0f;
     float normalEffectiveMass = 0.0f;
     float tangentEffectiveMass = 0.0f;
-    float friction = 0.0f;
     float restitutionTarget = 0.0f;
     float accumulatedNormalImpulse = 0.0f;
     float accumulatedTangentImpulse = 0.0f;
@@ -44,5 +35,16 @@ private:
     BodyId m_bodyA = InvalidIndex;
     BodyId m_bodyB = InvalidIndex;
     CollisionManifold m_manifold{};
-    ContactImpulseState m_impulseState{};
+    glm::vec2 m_normal{0.0f};
+    glm::vec2 m_tangent{0.0f};
+    glm::vec2 m_localReferenceNormal{0.0f};
+    bool m_hasReferenceNormal = false;
+    float m_inverseMassA = 0.0f;
+    float m_inverseMassB = 0.0f;
+    float m_inverseInertiaA = 0.0f;
+    float m_inverseInertiaB = 0.0f;
+    float m_inverseMassSum = 0.0f;
+    float m_friction = 0.0f;
+    std::array<ContactPointState, MaxManifoldPoints> m_pointStates{};
+    bool m_active = false;
 };

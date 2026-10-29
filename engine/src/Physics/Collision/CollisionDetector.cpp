@@ -8,82 +8,20 @@
 namespace
 {
 
-// axis should be normalized
-void ProjectPolygon(const std::vector<glm::vec2>& vertices, 
-    const glm::vec2& axis, 
-    float& outMin, float& outMax) {
-    outMin = std::numeric_limits<float>::max();
-    outMax = -std::numeric_limits<float>::max();
+struct FaceQuery {
+    float separation = -std::numeric_limits<float>::max();
+    int polygon = -1;   // 0: A, 1: B
+    int face = -1;      // 该多边形的边索引
+    glm::vec2 normal{0.0f};
+};
 
-    for (const auto& vertex : vertices) {
-        float proj = glm::dot(axis, vertex);
-        outMin = std::min(outMin, proj);
-        outMax = std::max(outMax, proj);
-    }
-}
-
-glm::vec2 ComputeContactPoint(
-    const std::vector<glm::vec2>& verticesA, 
-    const std::vector<glm::vec2>& verticesB, 
-    const glm::vec2& axis) {
-    if (verticesA.empty() || verticesB.empty()) return glm::vec2{0.0f};
-
-    const glm::vec2 normal = glm::normalize(axis);
-    const glm::vec2 tangent{-normal.y, normal.x};
-
-    // The manifold normal points from A to B. The contacting support of A is
-    // therefore its maximum projection along the normal; B's is its minimum.
-    float supportA = -std::numeric_limits<float>::max();
-    for (const glm::vec2& vertex : verticesA) {
-        supportA = std::max(supportA, glm::dot(vertex, normal));
-    }
-
-    float supportB = std::numeric_limits<float>::max();
-    for (const glm::vec2& vertex : verticesB) {
-        supportB = std::min(supportB, glm::dot(vertex, normal));
-    }
-
-    // Keep the whole support edge when several vertices share the extreme
-    // projection. Picking an arbitrary endpoint creates an artificial torque
-    // for face-to-face contacts such as a polygon resting on the ground.
-    const float supportTolerance = 1e-5f
-        * std::max({1.0f, std::abs(supportA), std::abs(supportB)});
-    float tangentMinA = std::numeric_limits<float>::max();
-    float tangentMaxA = -std::numeric_limits<float>::max();
-    for (const glm::vec2& vertex : verticesA) {
-        if (supportA - glm::dot(vertex, normal) <= supportTolerance) {
-            const float projection = glm::dot(vertex, tangent);
-            tangentMinA = std::min(tangentMinA, projection);
-            tangentMaxA = std::max(tangentMaxA, projection);
-        }
-    }
-
-    float tangentMinB = std::numeric_limits<float>::max();
-    float tangentMaxB = -std::numeric_limits<float>::max();
-    for (const glm::vec2& vertex : verticesB) {
-        if (glm::dot(vertex, normal) - supportB <= supportTolerance) {
-            const float projection = glm::dot(vertex, tangent);
-            tangentMinB = std::min(tangentMinB, projection);
-            tangentMaxB = std::max(tangentMaxB, projection);
-        }
-    }
-
-    // Pick the middle of the overlapping support intervals. If the features
-    // only touch at a corner, use the midpoint of their nearest endpoints.
-    float tangentCoordinate;
-    if (tangentMaxA < tangentMinB) {
-        tangentCoordinate = 0.5f * (tangentMaxA + tangentMinB);
-    } else if (tangentMaxB < tangentMinA) {
-        tangentCoordinate = 0.5f * (tangentMaxB + tangentMinA);
-    } else {
-        const float overlapMin = std::max(tangentMinA, tangentMinB);
-        const float overlapMax = std::min(tangentMaxA, tangentMaxB);
-        tangentCoordinate = 0.5f * (overlapMin + overlapMax);
-    }
-
-    const float normalCoordinate = 0.5f * (supportA + supportB);
-    return normal * normalCoordinate + tangent * tangentCoordinate;
-}
+struct ClipVertex {
+    glm::vec2 point{0.0f};
+    // 0/1 are original incident-edge vertices; 2 is a clipped intersection.
+    uint8_t incidentVertex = 0;
+    // 0 is original; 1/2 identify the reference side that created the point.
+    uint8_t clipSide = 0;
+};
 
 // <point, dist>
 std::pair<glm::vec2, float> ClosestPointOnSegment(
@@ -101,6 +39,96 @@ std::pair<glm::vec2, float> ClosestPointOnSegment(
     return {point, glm::length(center - point)};
 }
 
+void SwapManifoldBodies(CollisionManifold& manifold) {
+    manifold.normal = -manifold.normal;
+    manifold.referenceIsA ^= 1;
+    for (std::size_t i = 0; i < manifold.pointCount; ++i) {
+        auto& point = manifold.points[i];
+        std::swap(point.localPointA, point.localPointB);
+        point.feature.referenceIsA ^= 1;
+    }
+}
+
+bool QueryFace(const std::vector<glm::vec2>& selfVertices,
+    const std::vector<glm::vec2>& selfNormals,
+    const std::vector<glm::vec2>& otherVertices,
+    int polygonIndex,
+    FaceQuery& best) {
+    bool found = false;
+    for (std::size_t i = 0; i < selfNormals.size(); ++i) {
+        const auto& normal = selfNormals[i];
+        if (!std::isfinite(normal.x)
+            || !std::isfinite(normal.y)) continue;
+
+        float projectionA = -std::numeric_limits<float>::max();
+        float projectionB = +std::numeric_limits<float>::max();
+        for (const auto& vertex : selfVertices) {
+            if (glm::dot(normal, vertex) > projectionA) {
+                projectionA = glm::dot(normal, vertex);
+            }
+        }
+        for (const auto& vertex : otherVertices) {
+            if (glm::dot(normal, vertex) < projectionB) {
+                projectionB = glm::dot(normal, vertex);
+            }
+        }
+        if (projectionA < projectionB) continue;
+
+        found = true;
+        float separation = projectionB - projectionA;
+        if (separation > best.separation) {
+            best.separation = separation;
+            best.normal = normal;
+            best.polygon = polygonIndex;
+            best.face = i;
+        }
+    }
+    return found;
+}
+
+int FindIncidentEdge(const std::vector<glm::vec2>& normals,
+                     const glm::vec2& referenceNormal) {
+    if (normals.empty()) return -1;
+
+    int best = -1;
+    float minDot = std::numeric_limits<float>::max();
+    for (std::size_t i = 0; i < normals.size(); ++i) {
+        const float dot = glm::dot(referenceNormal, normals[i]);
+        if (dot < minDot) {
+            minDot = dot;
+            best = static_cast<int>(i);
+        }
+    }
+    return best;
+}
+
+// 保留 dot(normal, p) <= offset 的部分。
+// 输入 2 个点，输出最多 2 个点。
+int ClipSegmentToLine(ClipVertex out[2],
+                      const ClipVertex in[2],
+                      const glm::vec2& normal,
+                      float offset,
+                      uint8_t clipSide) {
+    int count = 0;
+    const float d0 = glm::dot(normal, in[0].point) - offset;
+    const float d1 = glm::dot(normal, in[1].point) - offset;
+
+    if (d0 <= 0.0f) out[count++] = in[0];
+    if (d1 <= 0.0f) out[count++] = in[1];
+
+    // 一内一外，产生一个交点。
+    if (d0 * d1 < 0.0f) {
+        const float t = d0 / (d0 - d1);
+        ClipVertex clipped;
+        clipped.point = in[0].point + t * (in[1].point - in[0].point);
+        clipped.incidentVertex = 2;
+        clipped.clipSide = clipSide;
+        out[count++] = clipped;
+    }
+
+    return count;
+}
+
 } // namespace
 
 
@@ -114,7 +142,7 @@ CollisionManifold CollisionDetector::Detect(
         return CircleVsCircle(
             std::get<CircleCollider>(first.data),
             firstTransform,
-            std::get<CircleCollider>(second.data), 
+            std::get<CircleCollider>(second.data),
             secondTransform
         );
     }
@@ -132,10 +160,10 @@ CollisionManifold CollisionDetector::Detect(
         auto manifold = CircleVsPolygon(
             std::get<CircleCollider>(second.data),
             secondTransform,
-            std::get<PolygonCollider>(first.data), 
+            std::get<PolygonCollider>(first.data),
             firstTransform
         );
-        manifold.normal = -manifold.normal;
+        SwapManifoldBodies(manifold);
         return manifold;
     }
     if (first.Type() == ColliderType::Polygon &&
@@ -157,24 +185,28 @@ CollisionManifold CollisionDetector::CircleVsCircle(
     const Transform2D& secondTransform) {
     glm::vec2 distance = secondTransform.position - firstTransform.position;
     float length2 = glm::dot(distance, distance);
-    if (length2 >= (first.radius + second.radius) * 
+    if (length2 >= (first.radius + second.radius) *
         (first.radius + second.radius)) {
         return CollisionManifold{};
     }
 
     CollisionManifold manifold{};
-    manifold.colliding = true;
-    glm::vec2 normal;
     float length = std::sqrt(length2);
-    if (length < 1e-6f) {
-        normal = glm::vec2{1.0f, 0.0f};
-    } else {
-        normal = distance / length;
-    }
+    glm::vec2 normal = length < 1e-6 ? glm::vec2{1.0f, 0.0f}
+        : distance / length;
+    const float penetration = first.radius + second.radius - length;
+    manifold.colliding = true;
     manifold.normal = normal;
-    manifold.contactPoint = firstTransform.position + 
-        normal * first.radius;
-    manifold.penetration = first.radius + second.radius - length;
+    manifold.pointCount = 1;
+
+    auto& point = manifold.points[0];
+    const glm::vec2 pA = firstTransform.position + normal * first.radius;
+    const glm::vec2 pB = secondTransform.position - normal * second.radius;
+    glm::vec2 worldPosition = (pA + pB) * 0.5f;
+    point.position = worldPosition;
+    point.localPointA = LocalPoint(firstTransform, worldPosition);
+    point.localPointB = LocalPoint(secondTransform, worldPosition);
+    point.separation = -penetration;
 
     return manifold;
 }
@@ -199,6 +231,7 @@ CollisionManifold CollisionDetector::CircleVsPolygon(
     glm::vec2 closestPoint{0.0f};
     glm::vec2 closestOutwardNormal{0.0f};
     float minDistance = std::numeric_limits<float>::max();
+    std::size_t closestEdge = 0;
     for (std::size_t i = 0; i < n; ++i) {
         const auto& vertexA = vertices[i];
         const auto& vertexB = vertices[(i + 1) % n];
@@ -218,39 +251,44 @@ CollisionManifold CollisionDetector::CircleVsPolygon(
             minDistance = dist;
             closestPoint = point;
             closestOutwardNormal = outwardNormal;
+            closestEdge = i;
         }
     }
     if (minDistance == std::numeric_limits<float>::max()) return {};
 
+    glm::vec2 normal{0.0f};
     if (centerInsidePolygon) {
-        const glm::vec2 normal = minDistance > 1e-6f
+        normal = minDistance > 1e-6f
             ? glm::normalize(center - closestPoint)
             : -closestOutwardNormal;
-        const glm::vec2 contactPoint = minDistance > 1e-6f
-            ? center - normal * radius
-            : closestPoint;
-        return {
-            true,
-            normal,
-            contactPoint,
-            minDistance + radius
-        };
+    } else {
+        if (minDistance >= radius) return {};
+        normal = minDistance > 1e-6f
+            ? glm::normalize(closestPoint - center)
+            : -closestOutwardNormal;
     }
 
-    if (minDistance >= radius) return {};
+    CollisionManifold manifold;
+    manifold.colliding = true;
+    manifold.normal = normal;
+    manifold.pointCount = 1;
 
-    const glm::vec2 normal = minDistance > 1e-6f
-        ? glm::normalize(closestPoint - center)
-        : -closestOutwardNormal;
-    const glm::vec2 contactPoint = minDistance > 1e-6f
-        ? center + normal * radius
-        : closestPoint;
-    return {
-        true,
-        normal,
-        contactPoint,
-        radius - minDistance
-    };
+    auto& point = manifold.points[0];
+    glm::vec2 pA = center + normal * radius;
+    glm::vec2 pB = closestPoint;
+    point.position = (pA + pB) * 0.5f;
+    point.localPointA = LocalPoint(circleTransform, pA);
+    point.localPointB = LocalPoint(polygonTransform, pB);
+    point.separation = -glm::dot(normal, pA - pB);
+
+    point.feature.referenceIsA = 0;
+    point.feature.referenceFace = static_cast<uint16_t>(closestEdge);
+    point.feature.incidentFace = 0;
+    point.feature.incidentVertex = 0;
+    point.feature.clipSide = 0;
+    manifold.referenceIsA = 0;
+
+    return manifold;
 }
 
 CollisionManifold CollisionDetector::PolygonVsPolygon(
@@ -258,59 +296,145 @@ CollisionManifold CollisionDetector::PolygonVsPolygon(
     const Transform2D& firstTransform,
     const PolygonCollider& second,
     const Transform2D& secondTransform) {
-    std::vector<glm::vec2> axes;
-    axes.reserve(first.normals.size() + second.normals.size());
-    for (const auto& normal : first.normals) {
-        axes.push_back(glm::normalize(MathHelper::Rotate(normal, firstTransform.rotation)));
+    if (first.vertices.size() < 3 || second.vertices.size() < 3) {
+        return CollisionManifold{};
     }
-    for (const auto& normal : second.normals) {
-        axes.push_back(glm::normalize(MathHelper::Rotate(normal, secondTransform.rotation)));
+    if (first.normals.size() != first.vertices.size()
+        || second.normals.size() != second.vertices.size()) {
+        return CollisionManifold{};
     }
 
     std::vector<glm::vec2> verticesA, verticesB;
+    std::vector<glm::vec2> normalsA, normalsB;
     verticesA.reserve(first.vertices.size());
     verticesB.reserve(second.vertices.size());
-    for (const auto& vertex : first.vertices) {
-        verticesA.push_back(WorldPoint(firstTransform, vertex));
+    normalsA.reserve(first.normals.size());
+    normalsB.reserve(second.normals.size());
+
+    for (std::size_t i = 0; i < first.vertices.size(); ++i) {
+        verticesA.push_back(WorldPoint(firstTransform, first.vertices[i]));
+        normalsA.push_back(glm::normalize(
+            MathHelper::Rotate(first.normals[i], firstTransform.rotation)));
     }
-    for (const auto& vertex : second.vertices) {
-        verticesB.push_back(WorldPoint(secondTransform, vertex));
-    }
-
-    glm::vec2 bestAxis{0.0f};
-    float minPenetration = std::numeric_limits<float>::max();
-    for (const auto& axis : axes) {
-        float min1, max1, min2, max2;
-        ProjectPolygon(verticesA, axis, min1, max1);
-        ProjectPolygon(verticesB, axis, min2, max2);
-
-        const float overlap = std::min(max1, max2) - std::max(min1, min2);
-        if (overlap <= 0.0f) {
-            return CollisionManifold{false};
-        }
-
-        if (overlap < minPenetration) {
-            minPenetration = overlap;
-            bestAxis = axis;
-        }
+    for (std::size_t i = 0; i < second.vertices.size(); ++i) {
+        verticesB.push_back(WorldPoint(secondTransform, second.vertices[i]));
+        normalsB.push_back(glm::normalize(
+            MathHelper::Rotate(second.normals[i], secondTransform.rotation)));
     }
 
-    if (glm::length(bestAxis) < 1e-6f) {
-        return CollisionManifold{false};
+    FaceQuery best;
+    if (!QueryFace(verticesA, normalsA, verticesB, 0, best)) {
+        return CollisionManifold{};
+    }
+    if (!QueryFace(verticesB, normalsB, verticesA, 1, best)) {
+        return CollisionManifold{};
+    }
+    if (best.polygon < 0 || best.face < 0) {
+        return CollisionManifold{};
     }
 
-    glm::vec2 centroidA = MathHelper::CalculatePolygonCentroid(verticesA);
-    glm::vec2 centroidB = MathHelper::CalculatePolygonCentroid(verticesB);
-    glm::vec2 distance = centroidB - centroidA;
-    if (glm::dot(distance, bestAxis) < 0.0f) {
-        bestAxis *= -1.0f;
+    const bool referenceIsA = best.polygon == 0;
+
+    const float referenceNormalLengthSquared =
+        glm::dot(best.normal, best.normal);
+    if (!(referenceNormalLengthSquared > 1e-12f)
+        || !std::isfinite(referenceNormalLengthSquared)) {
+        return CollisionManifold{};
     }
+    const glm::vec2 referenceNormal =
+        best.normal * glm::inversesqrt(referenceNormalLengthSquared);
+    const glm::vec2 manifoldNormal = referenceIsA
+        ? referenceNormal
+        : -referenceNormal; // 统一成 A -> B
+
+    const auto& referenceVertices = referenceIsA ? verticesA : verticesB;
+    const auto& incidentVertices  = referenceIsA ? verticesB : verticesA;
+    const auto& incidentNormals   = referenceIsA ? normalsB : normalsA;
+
+    const int referenceFace = best.face;
+    const int incidentFace = FindIncidentEdge(
+        incidentNormals, referenceNormal);
+    if (referenceFace < 0 || incidentFace < 0) {
+        return CollisionManifold{};
+    }
+
+    const std::size_t referenceCount = referenceVertices.size();
+    const glm::vec2 v1 = referenceVertices[referenceFace];
+    const glm::vec2 v2 = referenceVertices[(referenceFace + 1) % referenceCount];
+    const glm::vec2 referenceEdge = v2 - v1;
+    if (glm::dot(referenceEdge, referenceEdge) < 1e-12f) {
+        return CollisionManifold{};
+    }
+    const glm::vec2 tangent = glm::normalize(referenceEdge);
+
+    const std::size_t incidentCount = incidentVertices.size();
+    const glm::vec2 q0 = incidentVertices[incidentFace];
+    const glm::vec2 q1 = incidentVertices[(incidentFace + 1) % incidentCount];
+
+    ClipVertex incident[2] = {
+        {q0, 0}, {q1, 1}
+    };
+
+    ClipVertex clipped1[2];
+    const int count1 = ClipSegmentToLine(
+        clipped1, incident, -tangent, -glm::dot(tangent, v1), 1);
+    if (count1 == 0) return CollisionManifold{};
+
+    ClipVertex clipped2[2];
+    const int count2 = ClipSegmentToLine(
+        clipped2, clipped1, tangent, glm::dot(tangent, v2), 2);
+    if (count2 == 0) return CollisionManifold{};
 
     CollisionManifold manifold;
-    manifold.colliding = true;
-    manifold.normal = glm::normalize(bestAxis);
-    manifold.penetration = minPenetration;
-    manifold.contactPoint = ComputeContactPoint(verticesA, verticesB, manifold.normal);
+    manifold.normal = manifoldNormal;
+    manifold.referenceIsA = referenceIsA ? 1 : 0;
 
+    constexpr float contactTolerance = 0.01f;
+
+    for (int i = 0; i < count2; ++i) {
+        const glm::vec2& q = clipped2[i].point;
+        const float separation = glm::dot(q - v1, referenceNormal);
+        if (separation > contactTolerance) {
+            continue; // 这个点已经离开参考面，不是有效接触
+        }
+
+        ManifoldPoint point;
+        point.separation = separation;
+        point.position = q - 0.5f * separation * referenceNormal;
+
+        // q 在入射体上，pRef 在参考面上。
+        const glm::vec2 pRef = q - separation * referenceNormal;
+        if (referenceIsA) {
+            // 参考体是 A，入射体是 B
+            point.localPointA = LocalPoint(firstTransform, pRef);
+            point.localPointB = LocalPoint(secondTransform, q);
+        } else {
+            // 参考体是 B，入射体是 A
+            point.localPointA = LocalPoint(firstTransform, q);
+            point.localPointB = LocalPoint(secondTransform, pRef);
+        }
+
+        point.feature.referenceIsA = referenceIsA ? 1 : 0;
+        point.feature.referenceFace = static_cast<uint16_t>(referenceFace);
+        point.feature.incidentFace = static_cast<uint16_t>(incidentFace);
+        point.feature.incidentVertex = clipped2[i].incidentVertex;
+        point.feature.clipSide = clipped2[i].clipSide;
+
+        // 去重：两个裁剪点可能因为数值误差几乎重合。
+        bool duplicate = false;
+        for (uint8_t j = 0; j < manifold.pointCount; ++j) {
+            const glm::vec2 delta = point.position - manifold.points[j].position;
+            if (glm::dot(delta, delta) < 1e-8f) {
+                duplicate = true;
+                break;
+            }
+        }
+        if (duplicate) continue;
+
+        if (manifold.pointCount >= MaxManifoldPoints) break;
+        manifold.points[manifold.pointCount++] = point;
+    }
+
+    manifold.colliding = manifold.pointCount > 0;
     return manifold;
 }

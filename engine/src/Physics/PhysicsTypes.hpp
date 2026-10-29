@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 #include <cstdint>
 #include <limits>
+#include <cmath>
 
 inline constexpr uint32_t InvalidIndex =
     std::numeric_limits<uint32_t>::max();
@@ -19,11 +20,11 @@ struct Transform2D {
     float rotation = 0.0f;
 };
 
-inline glm::vec2 WorldPoint(const Transform2D& transform, 
+inline glm::vec2 WorldPoint(const Transform2D& transform,
     const glm::vec2& localPoint) {
     const float angle = transform.rotation;
-    float c = glm::cos(angle);
-    float s = glm::sin(angle);
+    float c = std::cos(angle);
+    float s = std::sin(angle);
 
     glm::vec2 rotated{
         c * localPoint.x - s * localPoint.y,
@@ -31,4 +32,18 @@ inline glm::vec2 WorldPoint(const Transform2D& transform,
     };
 
     return transform.position + rotated;
+}
+
+inline glm::vec2 LocalPoint(const Transform2D& transform,
+    const glm::vec2& worldPoint) {
+    const float angle = transform.rotation;
+    float c = std::cos(angle);
+    float s = std::sin(angle);
+
+    glm::vec2 local = worldPoint - transform.position;
+    local = {
+        local.x * c + local.y * s,
+        -local.x * s + local.y * c
+    };
+    return local;
 }

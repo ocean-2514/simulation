@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 class PhysicsWorld;
+class ContactCache;
 
 struct SolverContext {
     float deltaTime;
@@ -19,6 +20,8 @@ struct SolverContext {
 
     // 可能需要访问世界以解决某些全局问题（如连续碰撞检测的 TOI）
     PhysicsWorld& world;
+    ContactCache* contactCache = nullptr;
+    uint32_t stepIndex = 0;
 };
 
 class Constraint {

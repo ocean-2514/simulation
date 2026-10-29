@@ -7,6 +7,7 @@
 #include "Utils/MathHelper.hpp"
 #include "Physics/Forces/ForceGenetator.hpp"
 #include "Physics/Constraints/Constraint.hpp"
+#include "Physics/Collision/ContactCache.hpp"
 
 #include <vector>
 #include <memory>
@@ -86,4 +87,7 @@ private:
     std::vector<std::shared_ptr<ForceGenerator>> m_forceGenerators;
     std::vector<std::shared_ptr<Constraint>> m_constraints;
     BVHTree2D m_broadPhase;
+
+    ContactCache m_contactCache;
+    uint32_t m_stepIndex = 0;
 };
