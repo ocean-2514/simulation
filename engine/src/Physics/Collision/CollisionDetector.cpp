@@ -204,8 +204,10 @@ CollisionManifold CollisionDetector::CircleVsCircle(
     const glm::vec2 pB = secondTransform.position - normal * second.radius;
     glm::vec2 worldPosition = (pA + pB) * 0.5f;
     point.position = worldPosition;
-    point.localPointA = LocalPoint(firstTransform, worldPosition);
-    point.localPointB = LocalPoint(secondTransform, worldPosition);
+    // Keep each body's surface anchor separately. Position correction derives
+    // penetration from these anchors, while point.position is the solver point.
+    point.localPointA = LocalPoint(firstTransform, pA);
+    point.localPointB = LocalPoint(secondTransform, pB);
     point.separation = -penetration;
 
     return manifold;
