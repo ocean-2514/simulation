@@ -27,7 +27,9 @@ public:
     std::vector<ObjectHandle> Query(const AABB2 &range) const;
     // Appends matching handles to result; it does not clear the vector.
     void Query(const AABB2 &range, std::vector<ObjectHandle> &result) const;
-
+    int GetHeight() const {
+        return m_nodes[m_rootIndex].height;
+    }
 
 private:
 
