@@ -5,7 +5,7 @@
 
 #include <vector>
 
-class Stimulation : public Application
+class Stimulation2D : public Application
 {
 public:
     bool Init() override {

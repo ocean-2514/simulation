@@ -5,6 +5,7 @@ bool Engine::Init() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
     m_window = glfwCreateWindow(m_screenWidth, m_screenHeight, "window", NULL, NULL);
     if (m_window == NULL)
@@ -28,11 +29,13 @@ bool Engine::Init() {
     
     glEnable(GL_PROGRAM_POINT_SIZE);  //允许点的大小变化
     glEnable(GL_DEPTH_TEST);   //深度
+    glEnable(GL_MULTISAMPLE);
     glDepthFunc(GL_LESS);
 
     // callbacks
     glfwSetKeyCallback(m_window, OnKeyCallback);
     glfwSetMouseButtonCallback(m_window, OnMouseButtonCallback);
+    glfwSetCursorPosCallback(m_window, OnMousePos);
 
     // app
     if (m_app) {
@@ -45,9 +48,11 @@ bool Engine::Init() {
 }
 
 void Engine::Run() {
+    if (!m_app) return;
+
     float lastTime = 0.0f;
     float deltaTime = 0.0f;
-    while(!glfwWindowShouldClose(m_window))
+    while(!glfwWindowShouldClose(m_window) && !m_app->ShouldStop())
     {
         glfwPollEvents();
 
@@ -62,6 +67,8 @@ void Engine::Run() {
         if (m_app) {
             m_app->Update(deltaTime);
         }
+
+        m_inputManager.Clear();
         
         glfwSwapBuffers(m_window);
     }

@@ -68,6 +68,10 @@ private:
         }
     }
 
+    static void OnMousePos(GLFWwindow* window, double xpos, double ypos) {
+        Engine::GetInstance().GetInputManager().SetMousePos(static_cast<float>(xpos), static_cast<float>(ypos));
+    }
+
 private:
     GLFWwindow* m_window;
     Application* m_app;

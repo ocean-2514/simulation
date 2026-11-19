@@ -13,14 +13,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
-inline constexpr float PI = glm::pi<float>();
-
-struct Vertex
-{
-    glm::vec3 Position;  // 顶点位置
-    glm::vec3 Normal;    // 法线
-    glm::vec2 TexCoords; // 纹理坐标
-};
+#include "Geometry/GeometryCommon.h"
 
 class BufferGeometry
 {

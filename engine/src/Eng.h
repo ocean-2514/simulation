@@ -1,6 +1,7 @@
 #include "Engine.hpp"
 #include "Application.hpp"
 #include "Render/Shader.hpp"
+#include "Render/Camera.hpp"
 #include "Geometry/3D/BoxGeometry.hpp"
 #include "Geometry/3D/SphereGeometry.hpp"
 #include "Geometry/2D/Circle.hpp"
@@ -11,3 +12,5 @@
 #include "Physics/Constraints/FixedConstraint.hpp"
 #include "Physics/Constraints/HingeConstraint.hpp"
 #include "Input/Key.h"
+#include "Simulation/Cloth/ClothMeshRenderer.hpp"
+#include "Simulation/Cloth/ClothSolver.hpp"
