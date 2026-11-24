@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Simulation/Cloth/ClothConstraint.hpp"
+#include "Simulation/Cloth/Constraint/ClothConstraint.hpp"
 #include "Simulation/Cloth/ClothGrid.hpp"
 #include <vector>
 
@@ -21,7 +21,6 @@ public:
         ClothSolverSettings settings = {});
     
     void Step(float deltaTime);
-    
     
 private:
     void SimulateSubstep(float deltaTime);

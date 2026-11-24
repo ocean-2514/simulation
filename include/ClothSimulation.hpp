@@ -6,12 +6,15 @@ class ClothSimulation : public Application
 {
 public:
     bool Init() override {
+        const uint32_t a = 32;
         m_shader = std::make_unique<Shader>(SHADER_DIR "/cloth/vs.glsl", SHADER_DIR "/cloth/fs.glsl");
-        m_cloth = ClothGrid::Create({.origin = {0.0f, -.5f, 0.0f}});
+        m_cloth = ClothGrid::Create({.columns = a, .rows = a, .origin = {0.0f, .5f, 0.0f}});
         m_cloth->PinParticle(0);
-        m_cloth->PinParticle(15);
+        m_cloth->PinParticle(a - 1);
         m_clothRenderer = std::make_shared<ClothMeshRenderer>(m_cloth);
-        m_solver = std::make_unique<ClothSolver>(m_cloth);
+        m_solver = std::make_unique<ClothSolver>(m_cloth, 
+            ClothSolverSettings{.mode = ClothSolverMode::XPBD});
+        m_sphere = std::make_shared<SphereGeometry>(0.3f, 20, 20);
         return true;
     }
 
@@ -29,6 +32,10 @@ public:
         m_solver->Step(deltaTime);
         m_clothRenderer->RenewVertices();
         m_clothRenderer->Draw();
+
+        m_shader->setVec3("uColor", glm::vec3(0.0f, 1.0f, 0.0f));
+        m_shader->setMatrix4f("uModel", glm::translate(glm::mat4{1.0f}, glm::vec3(0.0f, -0.1f, -0.5f)));
+        m_sphere->Draw();
     }
 
 private:
@@ -52,4 +59,5 @@ private:
     std::unique_ptr<ClothSolver> m_solver;
     std::shared_ptr<ClothGrid> m_cloth;
     std::shared_ptr<ClothMeshRenderer> m_clothRenderer;
+    std::shared_ptr<SphereGeometry> m_sphere;
 };

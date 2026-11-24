@@ -79,6 +79,12 @@ public:
         dispose();
     }
 
+    void Draw() {
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+    }
+
 private:
     glm::mat4 matrix = glm::mat4(1.0f);
 

@@ -19,4 +19,5 @@ public:
     virtual void SolveXPBD(
         std::vector<ClothParticle>& particles,
         float deltaTime) = 0;
+    virtual void PostSolveVelocity(std::vector<ClothParticle>&) {}
 };

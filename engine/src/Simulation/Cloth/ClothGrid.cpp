@@ -40,8 +40,6 @@ std::shared_ptr<ClothGrid> ClothGrid::Create(
 void ClothGrid::BuildTriangleIndices() {
     const uint32_t columns = m_desc.columns;
     const uint32_t rows = m_desc.rows;
-    const float width = m_desc.width;
-    const float height = m_desc.height;
 
     m_triangleIndices.clear();
     m_triangleIndices.reserve(6 * (rows - 1) * (columns - 1));
